@@ -9,95 +9,95 @@ const db = require("../db");
 /** GET / - returns {companies: [{code,name}, ...]} */
 
 router.get("/", async function (req, res, next) {
-  const results = await db.query(`
+    const results = await db.query(`
         SELECT code, name 
         FROM companies`);
 
-  const companies = results.rows;
+    const companies = results.rows;
 
-  return res.json({ companies });
+    return res.json({ companies });
 });
 
-/** GET /[code] - return data about one company with invoices: {company:{code, name, description}}*/
+/** GET /[code] - return data about one company with invoices: {company:{code, name, description, invoces:[{},{}]}}*/
 
 router.get("/:code", async function (req, res, next) {
-  const code = req.params.code;
-  const results = await db.query(
-    `SELECT code, name , description
+    const code = req.params.code;
+    const results = await db.query(
+        `SELECT code, name , description
         FROM companies 
         WHERE code = $1`,
-    [code]
-  );
-  const company = results.rows[0];
+        [code]
+    );
+    const company = results.rows[0];
 
-  if (!company) throw new NotFoundError(`No matching company: ${code}`);
+    if (!company) throw new NotFoundError(`No matching company: ${code}`);
 
-  const invoiceResults = await db.query(
-    `SELECT id, comp_code, amt, paid, add_date, paid_date 
+    const invoiceResults = await db.query(
+        `SELECT id, comp_code, amt, paid, add_date, paid_date 
          FROM invoices
          WHERE comp_code = $1`,
-    [code]
-  );
+        [code]
+    );
 
-  const invoices = invoiceResults.rows;
-  company.invoices = invoices;
-  //   console.log(invoices);
+    const invoices = invoiceResults.rows;
+    company.invoices = invoices;
+    //   console.log(invoices);
 
-  return res.json({ company });
+    return res.json({ company });
 });
 
 /** POST / - create company from data; return {company:{code, name, description}} */
 
 router.post("/", async function (req, res, next) {
-  const { code, name, description } = req.body;
+    const { code, name, description } = req.body;
 
-  const results = await db.query(
-    `INSERT INTO companies (code, name, description)
+    const results = await db.query(
+        `INSERT INTO companies (code, name, description)
          VALUES ($1, $2, $3)
          RETURNING code, name, description`,
-    [code, name, description]
-  );
-  const company = results.rows[0];
+        [code, name, description]
+    );
+    const company = results.rows[0];
 
-  return res.status(201).json({ company });
+    return res.status(201).json({ company });
 });
 
 /** PUT /[code] - update fields in companies; return {company:{code, name, description}} */
 
 router.put("/:code", async function (req, res, next) {
-  if ("code" in req.body) throw new BadRequestError("Not allowed");
+    if ("code" in req.body) throw new BadRequestError("Not allowed");
 
-  const { name, description } = req.body;
-  const code = req.params.code;
+    const { name, description } = req.body;
+    const code = req.params.code;
 
-  const results = await db.query(
-    `UPDATE companies
+    const results = await db.query(
+        `UPDATE companies
          SET name=$2, description=$3
          WHERE code = $1
          RETURNING code, name, description`,
-    [code, name, description]
-  );
-  const company = results.rows[0];
+        [code, name, description]
+    );
+    const company = results.rows[0];
 
-  if (!company) throw new NotFoundError(`No matching company: ${code}`);
-  return res.json({ company });
+    if (!company) throw new NotFoundError(`No matching company: ${code}`);
+    return res.json({ company });
 });
 
 /** DELETE /[code] - delete company, return `{message: "Company deleted"}` */
 
 router.delete("/:code", async function (req, res, next) {
-  const code = req.params.code;
-  const results = await db.query(
-    `DELETE 
+    const code = req.params.code;
+    const results = await db.query(
+        `DELETE 
         FROM companies 
         WHERE code = $1 
         RETURNING code`,
-    [code]
-  );
-  const company = results.rows[0];
+        [code]
+    );
+    const company = results.rows[0];
 
-  if (!company) throw new NotFoundError(`No matching company: ${code}`);
-  return res.json({ message: "Company deleted" });
+    if (!company) throw new NotFoundError(`No matching company: ${code}`);
+    return res.json({ message: "Company deleted" });
 });
 
 module.exports = router;
