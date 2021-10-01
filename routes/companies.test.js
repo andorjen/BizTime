@@ -2,8 +2,7 @@ const request = require("supertest");
 const app = require("../app");
 const db = require("../db");
 
-let testCompanyCode;
-let testInvoice;
+let testCompany;
 
 beforeEach(async function () {
   await db.query("DELETE FROM companies");
@@ -12,7 +11,7 @@ beforeEach(async function () {
      VALUES ('test1', 'testName', 'testDescription')
      RETURNING code, name, description`
   );
-  testCompanyCode = results.rows[0].code;
+  testCompany = results.rows[0];
 });
 
 afterAll(async function () {
@@ -24,8 +23,8 @@ test("/companies", async function () {
   expect(resp.body).toEqual({
     companies: [
       {
-        code: "test1",
-        name: "testName",
+        code: testCompany.code,
+        name: testCompany.name,
       },
     ],
   });
@@ -37,9 +36,9 @@ describe("/companies/:code", function () {
     const resp = await request(app).get("/companies/test1");
     expect(resp.body).toEqual({
       company: {
-        code: "test1",
-        name: "testName",
-        description: "testDescription",
+        code: testCompany.code,
+        name: testCompany.name,
+        description: testCompany.description,
         invoices: [],
       },
     });
@@ -52,8 +51,9 @@ describe("/companies/:code", function () {
   });
 });
 
-describe("/companies/", function () {
-  test("POST", async function () {
+/** test post request to /companies */
+describe("/companies", function () {
+  test("post request with valid data", async function () {
     const resp = await request(app).post("/companies").send({
       code: "testCode2",
       name: "test2",
@@ -70,26 +70,66 @@ describe("/companies/", function () {
     expect(results.rows[0].count).toEqual("2");
     expect(resp.statusCode).toEqual(201);
   });
+  test("post request with duplicate pk", async function () {
+    const resp = await request(app).post("/companies").send({
+      code: "test1",
+      name: "testName",
+      description: "testDescription",
+    });
+    expect(resp.statusCode).toEqual(500);
+    expect(resp.body.error.message).toContain("duplicate key value violates unique constraint");
+    const results = await db.query("SELECT COUNT(*) FROM companies");
+    expect(results.rows[0].count).toEqual("1");
+
+  });
 });
 
-// test("PATCH /users/:id", async function () {
-//   const resp = await request(app)
-//     .patch(`/users/${testUserId}`)
-//     .send({ name: "Joel2", type: "dev2" });
-//   expect(resp.body).toEqual({
-//     user: {
-//       id: expect.any(Number),
-//       name: "Joel2",
-//       type: "dev2",
-//     },
-//   });
-//   const results = await db.query("SELECT COUNT(*) FROM users");
-//   expect(results.rows[0].count).toEqual("1");
-// });
+/** test put requests to update company info based on code */
+describe(" put /companies/:code", function () {
+  test("put with valid code and valid input", async function () {
+    const resp = await request(app).put("/companies/test1").send({
+      name: "newtestname",
+      description: "newtestdescription",
+    });
+    expect(resp.body).toEqual({
+      company: {
+        code: "test1",
+        name: "newtestname",
+        description: "newtestdescription",
+      }
+    });
+    expect(resp.statusCode).toEqual(200);
+  });
+  test("put request with invalid comp code", async function () {
+    const resp = await request(app).put("/companies/somethingelse").send({
+      name: "newtestname",
+      description: "newtestdescription",
+    });
+    expect(resp.body).toEqual({
+      error: { message: "No matching company: somethingelse", status: 404 }
+    });
 
-// test("DELETE /users/:id", async function () {
-//   const resp = await request(app).delete(`/users/${testUserId}`);
-//   expect(resp.body).toEqual({ message: "Deleted" });
-//   const results = await db.query("SELECT COUNT(*) FROM users");
-//   expect(results.rows[0].count).toEqual("0");
-// });
+  });
+});
+
+/** test delete requests to delete a company */
+describe(" delete /companies/:code", function () {
+  test("delete with a valid company code", async function () {
+    const resp = await request(app).delete('/companies/test1');
+    expect(resp.body).toEqual({ message: "Company deleted" });
+    expect(resp.statusCode).toEqual(200);
+
+    const results = await db.query("SELECT COUNT(*) FROM companies");
+    expect(results.rows[0].count).toEqual("0");
+  });
+
+  test("delete with an invalid company code", async function () {
+    const resp = await request(app).delete('/companies/somethingelse');
+    expect(resp.body).toEqual({
+      error: { message: "No matching company: somethingelse", status: 404 }
+    });
+
+    const results = await db.query("SELECT COUNT(*) FROM companies");
+    expect(results.rows[0].count).toEqual("1");
+  });
+});
